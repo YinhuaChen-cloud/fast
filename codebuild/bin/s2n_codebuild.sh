@@ -38,6 +38,7 @@ if [[ -x "$(command -v nproc)" ]]; then
     fi
 fi
 
+# 清除所有已构建的东西
 make clean;
 
 echo "Using $JOBS jobs for make..";
@@ -66,6 +67,7 @@ if [[ -n "$S2N_NO_PQ" ]]; then
     CMAKE_PQ_OPTION="S2N_NO_PQ=True"
 fi
 
+# cyhNOTE: 这个应该仅仅是用来测试 libcrypto 链接库
 test_linked_libcrypto() {
     s2n_executable="$1"
     so_path="${LIBCRYPTO_ROOT}/lib/libcrypto.so"
@@ -118,16 +120,37 @@ run_unit_tests() {
             -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=True \
             -DBUILD_SHARED_LIBS=on \
             -DEXPERIMENTAL_TREAT_WARNINGS_AS_ERRORS=on
+# . 指定根CMakeLists.txt文件的路径。
+# -Bbuild                                      选项指定生成构建系统的目录。在这种情况下，它将在名为 build 的目录中生成。
+# -DCMAKE_PREFIX_PATH=$LIBCRYPTO_ROOT          选项设置 libcrypto 库安装的目录路径。这用于在构建过程中查找和链接库。
+# -D${CMAKE_PQ_OPTION}                         选项将名为 CMAKE_PQ_OPTION 的CMake变量设置为在构建系统的其他地方确定的值。这是从外部构建系统向CMake传递选项的常见方法。
+# -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=True   选项将名为 S2N_BLOCK_NONPORTABLE_OPTIMIZATIONS 的CMake变量设置为 True。这用于在 s2n 库中启用非可移植优化。
+# -DBUILD_SHARED_LIBS=on                       这用于构建共享库而不是静态库。
+# -DEXPERIMENTAL_TREAT_WARNINGS_AS_ERRORS=on   用于在构建过程中将警告视为错误，可以帮助尽早发现潜在问题。
+# 根据猜测：这一段是在构建 build 下的构建系统
     cmake --build ./build -- -j $(nproc)
+# --build ./build 构建在build目录下生成的构建系统
+# -- -j 把参数传给底层构建系统，使用多处理器加速构建
+# 根据猜测：这一段实在 build 默认目标: libcrypto.so
+
+    # 测试 libcrypto 链接库
     test_linked_libcrypto ./build/bin/s2nc
+    # 运行测试
     cmake --build build/ --target test -- ARGS="-L unit --output-on-failure -j $(nproc)"
+    # --target test：此选项指定要构建的目标。在这种情况下，目标是 test，它会构建和运行项目的单元测试。
+    # -- ARGS="-L unit --output-on-failure -j $(nproc)"：此选项指定要传递给构建命令的其他参数。
+    # 在这种情况下，参数是 -L unit，它会过滤只运行带有 unit 标签的测试，--output-on-failure，它会打印失败测试的输出，
+    # 以及 -j $(nproc)，它会使用可用处理器的数量并行运行测试。
+    # 猜测：这一段是在运行测试，同时构建s2n可运行程序
+    # TODO: 注意，我认为运行测试的方法是，把 s2n-tls 跟要运行的测试一起编译
 }
 
+# 在我的环境变量中并没有定义 TESTS，估计是在 source codebuild/bin/s2n_setup_env.sh 这行定义的
 # Run Multiple tests on one flag.
 if [[ "$TESTS" == "ALL" || "$TESTS" == "sawHMACPlus" ]] && [[ "$OS_NAME" == "linux" ]]; then make -C tests/saw tmp/verify_HMAC.log tmp/verify_drbg.log failure-tests; fi
 
 # Run Individual tests
-if [[ "$TESTS" == "ALL" || "$TESTS" == "unit" ]]; then run_unit_tests; fi
+if [[ "$TESTS" == "ALL" || "$TESTS" == "unit" ]]; then echo "cyh add here" ; run_unit_tests; fi   # 默认情况下运行这一行
 if [[ "$TESTS" == "ALL" || "$TESTS" == "interning" ]]; then ./codebuild/bin/test_libcrypto_interning.sh; fi
 if [[ "$TESTS" == "ALL" || "$TESTS" == "asan" ]]; then make clean; S2N_ADDRESS_SANITIZER=1 make -j $JOBS ; fi
 if [[ "$TESTS" == "ALL" || "$TESTS" == "integrationv2" ]]; then run_integration_v2_tests; fi

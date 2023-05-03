@@ -1,3 +1,7 @@
+# Q: cmake会自动生成test目标吗
+# A: 是的，CMake可以自动生成test目标。在CMake中，可以使用add_test命令来定义测试用例，
+# 并使用enable_testing命令来启用测试。当启用测试时，CMake会自动创建一个
+
 cmake_minimum_required (VERSION 3.0)
 project (s2n C)
 
@@ -259,8 +263,14 @@ file(GLOB S2N_SRC
     ${UTILS_SRC}
 )
 
-add_library(${PROJECT_NAME} ${S2N_HEADERS} ${S2N_SRC})
+## added by cyh -- start
+# TODO: 猜测这里应该是编译出 s2n 核心库的地方
+MESSAGE("cyh: PROJECT_NAME = ${PROJECT_NAME}")
+MESSAGE("cyh: S2N_HEADERS = ${S2N_HEADERS}")
+MESSAGE("cyh: S2N_SRC = ${S2N_SRC}")
+add_library(${PROJECT_NAME} ${S2N_HEADERS} ${S2N_SRC}) # 根据 find 命令搜寻，libs2n.so 是一个动态库，应该是修改了配置选项，默认编译动态库
 set_target_properties(${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE C)
+## added by cyh -- end
 
 # Version numbers are for major updates only- we won't track minor/patch updates here.
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
@@ -593,7 +603,13 @@ target_include_directories(${PROJECT_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURR
 target_include_directories(${PROJECT_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/api> $<INSTALL_INTERFACE:include>)
 
 if (BUILD_TESTING)
-    enable_testing()
+    enable_testing() # 启动 test 目标
+
+    # added by cyh -- start
+
+    # 编译用来 “被测试用例链接” 的 被测试库的源文件，比较难判断是不是 s2n-tls 的核心源码
+    # 这部分代码还会链接 s2n 库，根据名字这个应该是核心代码
+    MESSAGE("cyh: PROJECT_NAME = ${PROJECT_NAME}")
 
     file(GLOB TESTLIB_SRC "tests/testlib/*.c")
     file(GLOB TESTLIB_HEADERS "tests/testlib/*.h" "tests/s2n_test.h")
@@ -602,6 +618,9 @@ if (BUILD_TESTING)
     target_include_directories(testss2n PUBLIC tests)
     target_compile_options(testss2n PRIVATE -std=gnu99)
     target_link_libraries(testss2n PUBLIC ${PROJECT_NAME})
+    # PROJECT_NAME = s2n
+
+    # added by cyh -- end
 
     if (S2N_INTERN_LIBCRYPTO)
         # if libcrypto was interned, rewrite libcrypto symbols so use of internal functions will link correctly
@@ -613,18 +632,41 @@ if (BUILD_TESTING)
     endif()
 
     #run unit tests
+    # 这段代码的作用是创建一个名为 allocator_overrides 的共享库，并将 tests/LD_PRELOAD 目录下所有以 .c 结尾的文件编译成共享库中的对象文件。
+    # 首先，file(GLOB ...) 命令用于将 tests/LD_PRELOAD 目录下所有以 .c 结尾的文件列表存储在 TEST_LD_PRELOAD 变量中。
+    # 然后，add_library 命令用于创建一个名为 allocator_overrides 的共享库，并将 TEST_LD_PRELOAD 变量中的所有文件编译成共享库中的对象文件。
+    # SHARED 关键字表示创建一个共享库，而不是静态库。
+    # 这个共享库的作用是覆盖默认的内存分配函数，以便在测试中使用自定义的内存分配函数。在测试中，可以使用 LD_PRELOAD 环境变量来加载这个共享库，
+    # 从而覆盖默认的内存分配函数。这样做的好处是，可以在测试中捕获内存分配错误，并更好地控制内存分配行为。
     file (GLOB TEST_LD_PRELOAD "tests/LD_PRELOAD/*.c")
     add_library(allocator_overrides SHARED ${TEST_LD_PRELOAD})
 
+    # file(GLOB ...) 命令用于将符合指定模式的文件列表存储在变量中。在这里，UNITTESTS_SRC 是一个变量，
+    # 用于存储 tests/unit 目录下所有以 .c 结尾的文件列表。
     file(GLOB UNITTESTS_SRC "tests/unit/*.c")
+
+    # added by cyh --- start
+    MESSAGE("cyh: UNITTESTS_SRC = ${UNITTESTS_SRC}")
+    # UNITTESTS_SRC 包含了 s2n-tls/tests/unit/ 下的所有 .c 文件路径，它们都是单元测试，使用 ; 分隔
+    # added by cyh --- end
+
     foreach(test_case ${UNITTESTS_SRC})
+        # 使用正则表达式从文件路径中提取测试用例的名称，并将其存储在 test_case_name 变量中
+        # test_case_name 就是 .c 文件名去掉后缀，也是最终生成的可执行文件的名字
+        # 测试用例 .c 文件中包含 main 函数，也就是整个程序的入口
         string(REGEX REPLACE ".+\\/(.+)\\.c" "\\1" test_case_name ${test_case})
 
+        # 使用 add_executable 命令创建一个可执行文件，名称为 test_case_name，源文件为 test_case。
         add_executable(${test_case_name} ${test_case})
+
+        # 指定这个可执行文件需要包含的头文件目录
         target_include_directories(${test_case_name} PRIVATE api)
         target_include_directories(${test_case_name} PRIVATE ./)
         target_include_directories(${test_case_name} PRIVATE tests)
+
+        # 该指令的作用为将目标文件与库文件进行链接。 将测试用例目标文件与 testss2n 库进行链接
         target_link_libraries(${test_case_name} PRIVATE testss2n)
+
         if (S2N_INTERN_LIBCRYPTO)
             # if libcrypto was interned, rewrite libcrypto symbols so use of internal functions will link correctly
             add_custom_command(
@@ -633,13 +675,18 @@ if (BUILD_TESTING)
                   find . -name '${test_case_name}.c.o' -exec objcopy --redefine-syms libcrypto.symbols {} \\\;
             )
         endif()
+        # 设置 test_case_name 的编译选项
         target_compile_options(${test_case_name} PRIVATE -Wno-implicit-function-declaration -Wno-deprecated -D_POSIX_C_SOURCE=200809L -std=gnu99)
         if (S2N_LTO)
             target_compile_options(${test_case_name} PRIVATE -flto)
         endif()
+
+        # 使用 add_test 命令添加一个测试，名称为 test_case_name，命令为 $<TARGET_FILE:${test_case_name}>，工作目录为 tests/unit。
         add_test(NAME ${test_case_name} COMMAND $<TARGET_FILE:${test_case_name}> WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit)
+
         set_property(TEST ${test_case_name} PROPERTY LABELS "unit")
 
+        # 使用 set_property 命令设置测试的属性，包括 LABELS、ENVIRONMENT LD_PRELOAD 和 ENVIRONMENT S2N_DONT_MLOCK。
         set_property(
         TEST
             ${test_case_name}
