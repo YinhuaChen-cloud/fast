@@ -35,4 +35,22 @@ all: $(OBJS)
 bc: $(BCS)
 	@echo "cyh: in crpto/Makefile, BCS = $(BCS)"
 
+# added by cyh --- start
+IR_DIR?=../tests/saw/ir/
+
+IRS_1= s2n_hash.ir s2n_hmac.ir s2n_drbg.ir s2n_fips.ir s2n_sequence.ir s2n_libcrypto.ir
+IRS=$(addprefix $(IR_DIR), $(IRS_1))
+# IRS =
+# ../tests/saw/ir/s2n_hash.ir 
+# ../tests/saw/ir/s2n_hmac.ir 
+# ../tests/saw/ir/s2n_drbg.ir 
+# ../tests/saw/ir/s2n_fips.ir 
+# ../tests/saw/ir/s2n_sequence.ir 
+# ../tests/saw/ir/s2n_libcrypto.ir
+
+.PHONY : ir
+ir: $(IRS)
+	@echo "cyh: in crpto/Makefile, IRS = $(IRS)"
+# added by cyh --- end
+
 include ../s2n.mk

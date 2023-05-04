@@ -161,3 +161,24 @@ clean:
 	$(MAKE) -C bin decruft
 	$(MAKE) -C lib decruft
 	$(MAKE) -C coverage clean
+
+# added by cyh --- start
+.PHONY : ir
+ir:
+	@mkdir -p tests/saw/ir
+	${MAKE} -C crypto ir
+	${MAKE} -C stuffer ir
+	${MAKE} -C tls ir
+	${MAKE} -C utils ir
+
+.PHONY : fast
+fast: ir
+	@echo "fast"
+
+
+.PHONY : fast-clean
+fast-clean: 
+	@rm -rf tests/saw/ir
+	@rm tls/extensions/*.ir
+
+# added by cyh --- end

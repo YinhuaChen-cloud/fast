@@ -25,4 +25,13 @@ all: $(OBJS)
 .PHONY : bc
 bc: $(BCS)
 
+# added by cyh --- start
+IRS_1=$(SRCS:.c=.ir)
+IRS=$(addprefix $(IR_DIR), $(IRS_1))
+
+.PHONY : ir
+ir: $(IRS)
+	@echo "cyh: in tls/extensions/Makefile, IRS = $(IRS)"
+# added by cyh --- end
+
 include ../../s2n.mk

@@ -23,6 +23,19 @@ BCS_1=s2n_handshake_io.bc s2n_handshake_type.bc s2n_connection.bc s2n_kex.bc \
 	s2n_tls13.bc s2n_quic_support.bc s2n_tls13_key_schedule.bc
 BCS=$(addprefix $(BITCODE_DIR), $(BCS_1))
 
+# added by cyh --- start
+IR_DIR?=../tests/saw/ir/
+
+IRS_1=s2n_handshake_io.ir s2n_handshake_type.ir s2n_connection.ir s2n_kex.ir \
+	s2n_tls13.ir s2n_quic_support.ir s2n_tls13_key_schedule.ir
+IRS=$(addprefix $(IR_DIR), $(IRS_1))
+
+.PHONY : ir
+ir: $(IRS)
+	@echo "cyh: in tls/Makefile, IRS = $(IRS)"
+	$(foreach subfolder, $(SUB_BUILDS), $(MAKE) -C $(subfolder) ir)
+# added by cyh --- end
+
 .PHONY : all
 all: $(OBJS)
 	$(foreach subfolder, $(SUB_BUILDS), $(MAKE) -C $(subfolder))
@@ -42,5 +55,6 @@ indent: indentsource
 .PHONY : clean
 clean: decruft
 	$(foreach subfolder, $(SUB_BUILDS), ${MAKE} -C $(subfolder) decruft)
+
 
 include ../s2n.mk

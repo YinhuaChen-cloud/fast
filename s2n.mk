@@ -273,6 +273,10 @@ CFLAGS_LLVM = ${DEFAULT_CFLAGS} -emit-llvm -c -g -O1
 $(BITCODE_DIR)%.bc: %.c
 	$(CLANG) $(CFLAGS_LLVM) -o $@ $< 
 
+# added by cyh --- start
+$(IR_DIR)%.ir: %.c
+	$(CLANG) $(CFLAGS_LLVM) -S -o $@ $< 
+# added by cyh --- end
 
 INDENTOPTS = -npro -kr -i4 -ts4 -nut -sob -l180 -ss -ncs -cp1
 
