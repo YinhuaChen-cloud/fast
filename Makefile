@@ -39,8 +39,12 @@ bc:
 	${MAKE} -C stuffer bc
 	${MAKE} -C tls bc
 	${MAKE} -C utils bc
+
+
 .PHONY : saw
 saw : bc
+# 可以打印出如下字符串，说明 bc 目标的完成没有问题
+	echo "cyh - in saw target" 
 	$(MAKE) -C tests/saw
 
 include s2n.mk

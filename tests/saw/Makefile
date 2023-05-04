@@ -28,8 +28,21 @@ export LIBCRYPTO_ROOT:=$(shell pwd)/../../libcrypto-root
 
 .PHONY : all
 all:
+	echo "cyh - in tests/saw/Makefile -- target all"
+	echo "LOGS = $(LOGS)"
+# LOGS = 
+# tmp/verify_imperative_cryptol_spec.log
+# tmp/verify_handshake.log
+# tmp/verify_drbg.log 
+# tmp/verify_state_machine.log 
+# tmp/verify_cork_uncork.log 
+# tmp/verify_HMAC.log
+	echo "MAKE = $(MAKE)"
+# MAKE = make
 	@echo "Running formal verification with ${YICES_VERSION}"
+# 清除 tmp/ 下的所有 .log 文件
 	@${MAKE} clean-logs
+# 清除 s2n, tmp, failure_tests, bitcode 等临时文件夹
 	@${MAKE} clean_the_dir
 	@${MAKE} $(LOGS)
 	@${MAKE} failure-tests

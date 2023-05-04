@@ -20,11 +20,19 @@ BITCODE_DIR?=../tests/saw/bitcode/
 
 BCS_1= s2n_hash.bc s2n_hmac.bc s2n_drbg.bc s2n_fips.bc s2n_sequence.bc s2n_libcrypto.bc
 BCS=$(addprefix $(BITCODE_DIR), $(BCS_1))
+# BCS = 
+# ../tests/saw/bitcode/s2n_hash.bc 
+# ../tests/saw/bitcode/s2n_hmac.bc 
+# ../tests/saw/bitcode/s2n_drbg.bc 
+# ../tests/saw/bitcode/s2n_fips.bc 
+# ../tests/saw/bitcode/s2n_sequence.bc 
+# ../tests/saw/bitcode/s2n_libcrypto.bc
 
 .PHONY : all
 all: $(OBJS)
 
 .PHONY : bc
 bc: $(BCS)
+	@echo "cyh: in crpto/Makefile, BCS = $(BCS)"
 
 include ../s2n.mk

@@ -261,8 +261,15 @@ ifeq ($(TRY_COMPILE_KTLS), 0)
 	DEFAULT_CFLAGS += -DS2N_PLATFORM_SUPPORTS_KTLS
 endif
 
+# marked by cyh: 可以看到，有 -emit-llvm，会生成 llvm IR
 CFLAGS_LLVM = ${DEFAULT_CFLAGS} -emit-llvm -c -g -O1
 
+# marked by cyh: 这就是把 s2n_hash.c 编译成 s2n_hash.bc 的地方
+# clang-3.9 -std=c99 -Wcast-qual -pedantic -Wall -Werror -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow  -Wcast-align -Wwrite-strings -fPIC -Wno-missing-braces -D_POSIX_C_S
+# OURCE=200809L -O2 -I/home/ieda/prjs/s2n-tls/libcrypto-root/include/ -I/home/ieda/prjs/s2n-tls/api/ -I/home/ieda/prjs/s2n-tls -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -D_
+# FORTIFY_SOURCE=2 -fgnu89-inline -fvisibility=hidden -DS2N_EXPORTS -Wstack-protector -fstack-protector-all -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -DS2N_FALL_THROUGH_SUPPORT
+# ED -DS2N___RESTRICT__SUPPORTED -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPP
+# ORTED -DS2N_PLATFORM_SUPPORTS_KTLS -emit-llvm -c -g -O1 -o ../tests/saw/bitcode/s2n_hash.bc s2n_hash.c
 $(BITCODE_DIR)%.bc: %.c
 	$(CLANG) $(CFLAGS_LLVM) -o $@ $< 
 
