@@ -165,7 +165,6 @@ clean:
 # added by cyh --- start
 .PHONY : ir
 ir:
-	@mkdir -p tests/saw/ir
 	${MAKE} -C crypto ir
 	${MAKE} -C stuffer ir
 	${MAKE} -C tls ir
@@ -174,11 +173,12 @@ ir:
 .PHONY : fast
 fast: ir
 	@echo "fast"
-
+	$(MAKE) -C tests/saw fast
 
 .PHONY : fast-clean
 fast-clean: 
-	@rm -rf tests/saw/ir
-	@rm tls/extensions/*.ir
+# 保留 tests/saw/ir/Makefile
+	-@rm -rf tests/saw/ir/*.ir
+	-@rm tls/extensions/*.ir
 
 # added by cyh --- end

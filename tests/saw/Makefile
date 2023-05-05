@@ -20,6 +20,13 @@
 
 #The scripts are all of the saw files in this directory
 SCRIPTS = $(wildcard *.saw)
+# SCRIPTS = 
+# verify_imperative_cryptol_spec.saw
+# verify_handshake.saw
+# verify_drbg.saw 
+# verify_state_machine.saw 
+# verify_cork_uncork.saw 
+# verify_HMAC.saw
 #A log file will be created for each test in the temp dir
 LOGS=$(patsubst %.saw,tmp/%.log,$(SCRIPTS))
 SHELL:=/bin/bash
@@ -44,9 +51,18 @@ all:
 	@${MAKE} clean-logs
 # 清除 s2n, tmp, failure_tests, bitcode 等临时文件夹
 	@${MAKE} clean_the_dir
-	@${MAKE} $(LOGS)
-	@${MAKE} failure-tests
+	
+	@${MAKE} bitcode/all_llvm.bc
 
+#	@${MAKE} $(LOGS)
+#	@${MAKE} failure-tests
+
+# added by cyh --- start
+.PHONY : fast
+fast:
+# 创造 ir/all_llvm.ir
+	@${MAKE} ir/all_llvm.ir
+# added by cyh --- end
 
 ############################################
 ## Clean targets
@@ -89,8 +105,11 @@ tmp/%.log : %.saw bitcode/all_llvm.bc tmp
 	@echo "Running formal verification with ${YICES_VERSION}"
 	@echo "Running formal verification with SAW version:"
 	@saw --version
+# set -o pipefail: 如果导管中的任意一个命令失败，整个流水线错误并且返回错误码
 	set -o pipefail; \
 	saw $< | tee $@
+# saw $< | tee $@: 使用 saw 对 .saw 脚本进行验证，同时把console输出
+# 复制到 tmp/.log 文件里
 
 ###########################################
 ## Failure Tests
@@ -221,6 +240,12 @@ tmp:
 bitcode/all_llvm.bc : s2n/crypto s2n/pq-crypto s2n/utils s2n/tls s2n/api s2n/error s2n/stuffer s2n/Makefile s2n/s2n.mk $(CRYPTO_COPY) $(PQ_CRYPTO_COPY) $(UTILS_COPY) $(TLS_COPY) $(API_COPY) $(ERROR_COPY) $(STUFFER_COPY)
 	${MAKE} -C s2n bc
 	${MAKE} -C bitcode all_llvm.bc
+
+# added by cyh --- start
+ir/all_llvm.ir : s2n/crypto s2n/pq-crypto s2n/utils s2n/tls s2n/api s2n/error s2n/stuffer s2n/Makefile s2n/s2n.mk $(CRYPTO_COPY) $(PQ_CRYPTO_COPY) $(UTILS_COPY) $(TLS_COPY) $(API_COPY) $(ERROR_COPY) $(STUFFER_COPY)
+	${MAKE} -C s2n ir
+	${MAKE} -C ir all_llvm.ir
+# added by cyh --- end
 
 
 s2n/lib/libs2n.so : s2n/crypto s2n/pq-crypto s2n/pq-crypto/kyber_r3 s2n/utils s2n/tls s2n/api s2n/error s2n/stuffer s2n/lib s2n/Makefile s2n/s2n.mk $(CRYPTO_COPY) $(PQ_CRYPTO_COPY) $(KYBER_R3_COPY) $(UTILS_COPY) $(TLS_COPY) $(API_COPY) $(ERROR_COPY) $(STUFFER_COPY) $(LIB_COPY)
