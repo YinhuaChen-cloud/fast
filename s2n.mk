@@ -263,8 +263,8 @@ endif
 
 CFLAGS_LLVM = ${DEFAULT_CFLAGS} -emit-llvm -c -g -O1
 
-$(BITCODE_DIR)%.bc: %.c
-	$(CLANG) $(CFLAGS_LLVM) -o $@ $< 
+# $(BITCODE_DIR)%.bc: %.c
+# 	$(CLANG) $(CFLAGS_LLVM) -o $@ $< 
 
 
 INDENTOPTS = -npro -kr -i4 -ts4 -nut -sob -l180 -ss -ncs -cp1
@@ -281,3 +281,53 @@ lcov:
 .PHONY : decruft
 decruft:
 	$(RM) -- ${CRUFT}
+
+
+# added by cyh --- start
+$(BITCODE_DIR)%.bc: %.c
+	clang $(FAST_BC_CLANG_FLAGS) -o $@ -c $< 
+
+FAST_BC_CLANG_FLAGS = -D_POSIX_C_SOURCE=200809L \
+	-Ds2n_EXPORTS \
+	-I$(S2N_ROOT) \
+	-I$(S2N_ROOT)/api \
+	-isystem $(S2N_ROOT)/test-deps/openssl-1.1.1/include \
+	-fPIC \
+	-pedantic \
+	-std=gnu99 \
+	-Wall \
+	-Wimplicit \
+	-Wunused \
+	-Wcomment \
+	-Wchar-subscripts \
+	-Wuninitialized \
+	-Wshadow \
+	-Wcast-align \
+	-Wwrite-strings \
+	-Wno-deprecated-declarations \
+	-Wno-unknown-pragmas \
+	-Wformat-security \
+	-Wno-missing-braces \
+	-Wno-strict-prototypes \
+	-Wa,--noexecstack \
+	-Wsign-compare \
+	-Werror \
+	-fvisibility=default \
+	-DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 \
+	-DS2N_KYBER512R3_AVX2_BMI2 \
+	-DS2N_STACKTRACE \
+	-DS2N_CPUID_AVAILABLE \
+	-DS2N_FEATURES_AVAILABLE \
+	-fPIC \
+	-DS2N_FALL_THROUGH_SUPPORTED \
+	-DS2N___RESTRICT__SUPPORTED \
+	-DS2N_MADVISE_SUPPORTED \
+	-DS2N_CLONE_SUPPORTED \
+	-Wcast-qual \
+	-DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH \
+	-DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 \
+	-DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX \
+	-DS2N_PLATFORM_SUPPORTS_KTLS \
+	-pthread \
+  -g -O1 -emit-llvm
+# added by cyh --- end

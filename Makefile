@@ -162,7 +162,12 @@ clean:
 # added by cyh --- start
 .PHONY : fast
 fast :
-	$(MAKE) -C tests/saw saw-fast
+	$(MAKE) -C tests/saw total-fast
+
+.PHONY : fast-clean
+fast-clean : clean
+	rm -rf tests/saw/libs2n_objs/*
+	rm -rf tests/saw/bitcode/all_llvm.*
 # added by cyh --- end
 
 

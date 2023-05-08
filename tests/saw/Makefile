@@ -77,7 +77,8 @@ tmp/%.log : %.saw bitcode/all_llvm.bc tmp
 	@echo "Running formal verification with SAW version:"
 	@saw --version
 	set -o pipefail; \
-	saw $< | tee $@
+	sudo docker run -v $(shell pwd):/a ghcr.io/galoisinc/saw:nightly a/$< | tee $@
+# saw $< | tee $@
 
 ###########################################
 ## Failure Tests
@@ -209,7 +210,6 @@ bitcode/all_llvm.bc : s2n/crypto s2n/pq-crypto s2n/utils s2n/tls s2n/api s2n/err
 	${MAKE} -C s2n bc
 	${MAKE} -C bitcode all_llvm.bc
 
-
 s2n/lib/libs2n.so : s2n/crypto s2n/pq-crypto s2n/pq-crypto/kyber_r3 s2n/utils s2n/tls s2n/api s2n/error s2n/stuffer s2n/lib s2n/Makefile s2n/s2n.mk $(CRYPTO_COPY) $(PQ_CRYPTO_COPY) $(KYBER_R3_COPY) $(UTILS_COPY) $(TLS_COPY) $(API_COPY) $(ERROR_COPY) $(STUFFER_COPY) $(LIB_COPY)
 	${MAKE} -C s2n libs NO_STACK_PROTECTOR=1 NO_INLINE=1
 
@@ -236,36 +236,46 @@ s2n/pq-crypto/s2n_pq_asm.mk : ../../pq-crypto/s2n_pq_asm.mk
 
 
 # added by cyh --- start
-# 用于编译 libs2n.so 的源文件
-S2N_SRC = $(addprefix $(S2N_ROOT)/, $(shell cat libs2n_source))
-S2N_OBJS = $(addprefix libs2n_objs/, $(addsuffix .o, $(shell cat libs2n_source)))	
-S2N_BC = $(addprefix libs2n_objs/, $(addsuffix .bc, $(shell cat libs2n_source)))	
-# 使用filter函数找到以"_avx2.c"结尾的源文件
-# S2N_SRC_AVX2 = $(filter %_avx2.c, $(S2N_SRC))
+# libs2n.so 的一部分，但是不属于 all_llvm.bc 的源C代码文件
+MOREFILES = $(addprefix $(S2N_ROOT)/, $(shell cat morefiles))
+MOREOBJS = $(addprefix libs2n_objs/, $(addsuffix .o, $(shell cat morefiles)))	
 # 使用filter函数找到以"_avx2.c.o"结尾的目标文件
-S2N_OBJS_AVX2 = $(filter %_avx2.c.o, $(S2N_OBJS))
-S2N_BC_AVX2 = $(filter %_avx2.c.bc, $(S2N_BC))
-# FASTLOGS=$(patsubst %.saw, fast_saw_logs/%.log, $(SCRIPTS))
+AVX2_OBJS = $(filter %_avx2.c.o, $(MOREOBJS))
 
 # 1. 编译 libs2n.so
-.PHONY : saw-fast
-# saw-fast : $(S2N_OBJS)
-saw-fast : $(S2N_BC)
-# 先获取 .bc 文件，以便做 SAW 验证
-# @echo "S2N_OBJS_AVX2 = $(S2N_OBJS_AVX2)"
-# 先把所有的 .bc 文件变成 .o 文件，然后链接成 libs2n.so，接着运行测试套件
+.PHONY : total-fast
+total-fast :
+# 先清理临时文件，比如 tmp/*.log，s2n，failure_tests，bitcode 等
+	@${MAKE} clean-logs
+	@${MAKE} clean_the_dir
+# FAST 分为
+# 	1. 编译SAW验证相关源码为 LLVM BC，链接成为成为 all_llvm.bc
+	make bitcode/all_llvm.bc
+#		2. 把 all_llvm.bc 转换成 all_llvm.ll (LLVM IR) 的一种
+	llvm-dis bitcode/all_llvm.bc -o bitcode/all_llvm.ll
+#   3. 进行代码突变
+	make mutation
+#   4. 把突变后的 all_llvm.ll 转回 all_llvm.bc
+	llvm-as bitcode/all_llvm.ll -o bitcode/all_llvm.bc
+#   5. 对突变后的 all_llvm.bc 进行 SAW 验证，SAW验证时的输出放在 tmp 文件夹下
+	@${MAKE} $(LOGS)
+# 	6. SAW验证结束后，把 all_llvm.bc 文件转换成 all_llvm.o 文件
+	llc -filetype=obj --relocation-model=pic bitcode/all_llvm.bc -o bitcode/all_llvm.o
+#   7. 把 all_llvm.o 和 其它 .o 文件共同链接成 libs2n.so 动态库
 	make cyhlink
+#   9. 运行测试套件
 	cp lib/* $(S2N_ROOT)/build/lib
 	make -C $(S2N_ROOT)/build test ARGS="-L unit --output-on-failure -j $(shell nproc)"
 
-cyhlink : $(S2N_OBJS)
-# 链接成 libs2n.so
+
+cyhlink : $(MOREOBJS) bitcode/all_llvm.o
+# 链接成 libs2n.so, libs2n.so.1, libs2n.so.1.0.0
 	clang -fPIC \
 	-Wl,-z,noexecstack,-z,relro,-z,now \
 	-shared \
 	-Wl,-soname,libs2n.so.1 \
 	-o lib/libs2n.so.1.0.0 \
-	$(S2N_OBJS) \
+	$^ \
 	-Wl,-rpath,$(S2N_ROOT)/test-deps/openssl-1.1.1/lib: \
 	$(S2N_ROOT)/test-deps/openssl-1.1.1/lib/libcrypto.so \
 	-ldl \
@@ -275,56 +285,17 @@ cyhlink : $(S2N_OBJS)
 	cmake -E cmake_symlink_library lib/libs2n.so.1.0.0 lib/libs2n.so.1 lib/libs2n.so
 	cmake -E touch_nocreate lib/libs2n.so
 
-# # 清除 tmp/ 下的所有 .log 文件
-# 	@${MAKE} clean-logs
-# # 清除 s2n, tmp, failure_tests, bitcode 等临时文件夹
-# 	@${MAKE} clean_the_dir
-# # 生成 bitcode/all_llvm.bc
-# 	@${MAKE} bitcode/all_llvm.bc
-# # 生成 bitcode/all_llvm.ll
-# 	llvm-dis bitcode/all_llvm.bc -o bitcode/all_llvm.ll
-# # 进行突变
-# 	@echo "CODE mutation"
-# # 转化回 .bc 文件，替换 all_llvm.bc
-# 	llvm-as bitcode/all_llvm.ll -o bitcode/all_llvm.bc
-# # 使用 saw *.saw 进行验证，生成日志放在 fast_saw_logs/.log 文件里
-# 	# @${MAKE} $(FASTLOGS)
-# # 通过 SAW 验证后，要执行测试套件，首先先编译 libs2n.so 比 all_llvm.bc 多出来的那些源文件
-# # 这些代码编译出的目标文件我放在 more 文件夹下
-# 	@${MAKE} morefiles
-# #	failure_test 故意往 s2n 代码引入错误，检验 saw 脚本是否能纠出错误 
-#   # @${MAKE} failure-tests
-# # added by cyh --- end
-
-$(S2N_BC_AVX2) : libs2n_objs/%.bc : $(S2N_ROOT)/%
-	@mkdir -p $(dir $@)
-	clang	$(FAST_CLANG_FLAGS) -mavx2 -mavx -mbmi2 -emit-llvm -o $@ -c $<
-
-libs2n_objs/%.bc : $(S2N_ROOT)/%
-	@mkdir -p $(dir $@)
-	clang	$(FAST_CLANG_FLAGS) -emit-llvm -o $@ -c $<
 
 # 当多个规则匹配同一个目标时，老版本的 make 会选用第一个规则
 # 新版本的 make 会选用最 specific 的规则
-$(S2N_OBJS_AVX2) : libs2n_objs/%.o : libs2n_objs/%.bc
+$(AVX2_OBJS) : libs2n_objs/%.o : $(S2N_ROOT)/%
 	@mkdir -p $(dir $@)
-	llc -filetype=obj --relocation-model=pic $< -o $@
+	clang	$(FAST_CLANG_FLAGS) -mavx2 -mavx -mbmi2 -o $@ -c $<
 
-libs2n_objs/%.o : libs2n_objs/%.bc
+libs2n_objs/%.o : $(S2N_ROOT)/%
 	@mkdir -p $(dir $@)
-	llc -filetype=obj --relocation-model=pic $< -o $@
+	clang	$(FAST_CLANG_FLAGS) -o $@ -c $<
 
-# # 当多个规则匹配同一个目标时，老版本的 make 会选用第一个规则
-# # 新版本的 make 会选用最 specific 的规则
-# $(S2N_OBJS_AVX2) : libs2n_objs/%.o : $(S2N_ROOT)/%
-# 	@mkdir -p $(dir $@)
-# 	clang	$(FAST_CLANG_FLAGS) -mavx2 -mavx -mbmi2 -o $@ -c $<
-
-# libs2n_objs/%.o : $(S2N_ROOT)/%
-# 	@mkdir -p $(dir $@)
-# 	clang	$(FAST_CLANG_FLAGS) -o $@ -c $<
-
-# clang -std=c99 -Wcast-qual -pedantic -Wall -Werror -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow  -Wcast-align -Wwrite-strings -fPIC -Wno-missing-braces -D_POSIX_C_SOURCE=200809L -O2 -I/home/ieda/prjs/s2n-tls/libcrypto-root/include/ -I/home/ieda/prjs/s2n-tls/api/ -I/home/ieda/prjs/s2n-tls -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -D_FORTIFY_SOURCE=2 -fgnu89-inline -fvisibility=hidden -DS2N_EXPORTS -Wstack-protector -fstack-protector-all -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -DS2N_FALL_THROUGH_SUPPORTED -DS2N___RESTRICT__SUPPORTED -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPPORTED -DS2N_PLATFORM_SUPPORTS_KTLS -emit-llvm -c -g -O1 -o ../tests/saw/bitcode/s2n_hash.bc s2n_hash.c 
 
 FAST_CLANG_FLAGS = -D_POSIX_C_SOURCE=200809L \
 	-Ds2n_EXPORTS \
@@ -377,6 +348,9 @@ FAST_CLANG_FLAGS = -D_POSIX_C_SOURCE=200809L \
 # /usr/bin/clang -D_POSIX_C_SOURCE=200809L -Ds2n_EXPORTS -I/home/ieda/prjs/s2n-tls -I/home/ieda/prjs/s2n-tls/api -isystem /home/ieda/prjs/s2n-tls/test-deps/openssl-1.1.1/include  -fPIC   -pedantic -std=gnu99 -Wall -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow -Wcast-align -Wwrite-strings -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -Wno-missing-braces -Wno-strict-prototypes -Wa,--noexecstack -Wsign-compare -Werror -fvisibility=default -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 -DS2N_KYBER512R3_AVX2_BMI2 -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -fPIC -DS2N_FALL_THROUGH_SUPPORTED -DS2N___RESTRICT__SUPPORTED -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPPORTED -Wcast-qual -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_PLATFORM_SUPPORTS_KTLS -pthread -g -O1 -c /home/ieda/prjs/s2n-tls/pq-crypto/kyber_r3/kyber512r3_ntt_avx2.S -o libs2n_objs/pq-crypto/kyber_r3/kyber512r3_ntt_avx2.S.o
 # /usr/bin/clang -D_POSIX_C_SOURCE=200809L -Ds2n_EXPORTS -I/home/ieda/prjs/s2n-tls -I/home/ieda/prjs/s2n-tls/api -isystem /home/ieda/prjs/s2n-tls/test-deps/openssl-1.1.1/include  -fPIC   -pedantic -std=gnu99 -Wall -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow -Wcast-align -Wwrite-strings -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -Wno-missing-braces -Wno-strict-prototypes -Wa,--noexecstack -Wsign-compare -Werror -fvisibility=default -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 -DS2N_KYBER512R3_AVX2_BMI2 -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -fPIC -DS2N_FALL_THROUGH_SUPPORTED -DS2N___RESTRICT__SUPPORTED -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPPORTED -Wcast-qual -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_PLATFORM_SUPPORTS_KTLS -pthread -g -O1 -c /home/ieda/prjs/s2n-tls/pq-crypto/kyber_r3/kyber512r3_shuffle_avx2.S -o libs2n_objs/pq-crypto/kyber_r3/kyber512r3_shuffle_avx2.S.o
 
+.PHONY : mutation
+mutation:
+	@echo "code mutation"
 
-
+# added by cyh --- end
 
