@@ -1,6 +1,10 @@
 cmake_minimum_required (VERSION 3.0)
 project (s2n C)
 
+# 设置编译器为 clang，统一编译 libs2n.so 和 all_llvm.bc 的编译器
+# libs2n.so 用于运行测试套件，all_llvm.bc 用于运行 SAW 验证程序
+set(CMAKE_C_COMPILER "clang")
+
 if(POLICY CMP0077)
     cmake_policy(SET CMP0077 NEW) #option does nothing when a normal variable of the same name exists.
 endif()
@@ -259,6 +263,9 @@ file(GLOB S2N_SRC
     ${UTILS_SRC}
 )
 
+message("cyh: PROJECT_NAME = ${PROJECT_NAME}")
+message("cyh: S2N_HEADERS = ${S2N_HEADERS}")
+message("cyh: S2N_SRC = ${S2N_SRC}")
 add_library(${PROJECT_NAME} ${S2N_HEADERS} ${S2N_SRC})
 set_target_properties(${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE C)
 

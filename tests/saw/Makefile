@@ -233,3 +233,142 @@ s2n/s2n.mk : ../../s2n.mk
 
 s2n/pq-crypto/s2n_pq_asm.mk : ../../pq-crypto/s2n_pq_asm.mk
 	cp $< $@
+
+
+
+# added by cyh --- start
+# 用于编译 libs2n.so 的源文件
+S2N_SRC = $(addprefix $(S2N_ROOT)/, $(shell cat libs2n_source))
+S2N_OBJS = $(addprefix libs2n_objs/, $(addsuffix .o, $(shell cat libs2n_source)))	
+# FASTLOGS=$(patsubst %.saw, fast_saw_logs/%.log, $(SCRIPTS))
+
+# 1. 编译 libs2n.so
+.PHONY : saw-fast
+saw-fast : $(S2N_OBJS)
+	# @echo "S2N_ROOT = $(S2N_ROOT)"
+	# @echo "S2N_SRC = $(S2N_SRC)"
+	# @echo "S2N_OBJS = $(S2N_OBJS)"
+	# @mkdir -p libs2n_objs
+# # 清除 tmp/ 下的所有 .log 文件
+# 	@${MAKE} clean-logs
+# # 清除 s2n, tmp, failure_tests, bitcode 等临时文件夹
+# 	@${MAKE} clean_the_dir
+# # 生成 bitcode/all_llvm.bc
+# 	@${MAKE} bitcode/all_llvm.bc
+# # 生成 bitcode/all_llvm.ll
+# 	llvm-dis bitcode/all_llvm.bc -o bitcode/all_llvm.ll
+# # 进行突变
+# 	@echo "CODE mutation"
+# # 转化回 .bc 文件，替换 all_llvm.bc
+# 	llvm-as bitcode/all_llvm.ll -o bitcode/all_llvm.bc
+# # 使用 saw *.saw 进行验证，生成日志放在 fast_saw_logs/.log 文件里
+# 	# @${MAKE} $(FASTLOGS)
+# # 通过 SAW 验证后，要执行测试套件，首先先编译 libs2n.so 比 all_llvm.bc 多出来的那些源文件
+# # 这些代码编译出的目标文件我放在 more 文件夹下
+# 	@${MAKE} morefiles
+# #	failure_test 故意往 s2n 代码引入错误，检验 saw 脚本是否能纠出错误 
+#   # @${MAKE} failure-tests
+# # added by cyh --- end
+
+libs2n_objs/%.o : $(S2N_ROOT)/%
+	@mkdir -p $(dir $@)
+	clang	$(FAST_CLANG_FLAGS) -o $@ -c @<
+
+# libs2n_objs/
+
+	# -o \
+	# CMakeFiles/s2n.dir/crypto/s2n_aead_cipher_aes_gcm.c.o \
+	# -c \
+	# /home/ieda/prjs/s2n-tls/crypto/s2n_aead_cipher_aes_gcm.c
+
+
+FAST_CLANG_FLAGS = -D_POSIX_C_SOURCE=200809L \
+	-Ds2n_EXPORTS \
+	-I$(S2N_ROOT) \
+	-I$(S2N_ROOT)/api \
+	-isystem $(S2N_ROOT)/test-deps/openssl-1.1.1/include \
+	-fPIC \
+	-pedantic \
+	-std=gnu99 \
+	-Wall \
+	-Wimplicit \
+	-Wunused \
+	-Wcomment \
+	-Wchar-subscripts \
+	-Wuninitialized \
+	-Wshadow \
+	-Wcast-align \
+	-Wwrite-strings \
+	-Wno-deprecated-declarations \
+	-Wno-unknown-pragmas \
+	-Wformat-security \
+	-Wno-missing-braces \
+	-Wno-strict-prototypes \
+	-Wa,--noexecstack \
+	-Wsign-compare \
+	-Werror \
+	-fvisibility=default \
+	-DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 \
+	-DS2N_KYBER512R3_AVX2_BMI2 \
+	-DS2N_STACKTRACE \
+	-DS2N_CPUID_AVAILABLE \
+	-DS2N_FEATURES_AVAILABLE \
+	-fPIC \
+	-DS2N_FALL_THROUGH_SUPPORTED \
+	-DS2N___RESTRICT__SUPPORTED \
+	-DS2N_MADVISE_SUPPORTED \
+	-DS2N_CLONE_SUPPORTED \
+	-Wcast-qual \
+	-DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH \
+	-DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 \
+	-DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX \
+	-DS2N_PLATFORM_SUPPORTS_KTLS \
+	-pthread
+
+# clang \
+# -D_POSIX_C_SOURCE=200809L \
+# -Ds2n_EXPORTS \
+# -I/home/ieda/prjs/s2n-tls \
+# -I/home/ieda/prjs/s2n-tls/api \
+# -isystem /home/ieda/prjs/s2n-tls/test-deps/openssl-1.1.1/include \
+# -fPIC \
+# -pedantic \
+# -std=gnu99 \
+# -Wall \
+# -Wimplicit \
+# -Wunused \
+# -Wcomment \
+# -Wchar-subscripts \
+# -Wuninitialized \
+# -Wshadow \
+# -Wcast-align \
+# -Wwrite-strings \
+# -Wno-deprecated-declarations \
+# -Wno-unknown-pragmas \
+# -Wformat-security \
+# -Wno-missing-braces \
+# -Wno-strict-prototypes \
+# -Wa,--noexecstack \
+# -Wsign-compare \
+# -Werror \
+# -fvisibility=default \
+# -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 \
+# -DS2N_KYBER512R3_AVX2_BMI2 \
+# -DS2N_STACKTRACE \
+# -DS2N_CPUID_AVAILABLE \
+# -DS2N_FEATURES_AVAILABLE \
+# -fPIC \
+# -DS2N_FALL_THROUGH_SUPPORTED \
+# -DS2N___RESTRICT__SUPPORTED \
+# -DS2N_MADVISE_SUPPORTED \
+# -DS2N_CLONE_SUPPORTED \
+# -Wcast-qual \
+# -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH \
+# -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 \
+# -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX \
+# -DS2N_PLATFORM_SUPPORTS_KTLS \
+# -pthread \
+# -o \
+# CMakeFiles/s2n.dir/crypto/s2n_aead_cipher_aes_gcm.c.o \
+# -c \
+# /home/ieda/prjs/s2n-tls/crypto/s2n_aead_cipher_aes_gcm.c

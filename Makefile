@@ -157,3 +157,13 @@ clean:
 	$(MAKE) -C bin decruft
 	$(MAKE) -C lib decruft
 	$(MAKE) -C coverage clean
+
+
+# added by cyh --- start
+.PHONY : fast
+fast :
+	$(MAKE) -C tests/saw saw-fast
+# added by cyh --- end
+
+
+
