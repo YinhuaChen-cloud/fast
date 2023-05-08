@@ -235,20 +235,46 @@ s2n/pq-crypto/s2n_pq_asm.mk : ../../pq-crypto/s2n_pq_asm.mk
 	cp $< $@
 
 
-
 # added by cyh --- start
 # 用于编译 libs2n.so 的源文件
 S2N_SRC = $(addprefix $(S2N_ROOT)/, $(shell cat libs2n_source))
 S2N_OBJS = $(addprefix libs2n_objs/, $(addsuffix .o, $(shell cat libs2n_source)))	
+S2N_BC = $(addprefix libs2n_objs/, $(addsuffix .bc, $(shell cat libs2n_source)))	
+# 使用filter函数找到以"_avx2.c"结尾的源文件
+# S2N_SRC_AVX2 = $(filter %_avx2.c, $(S2N_SRC))
+# 使用filter函数找到以"_avx2.c.o"结尾的目标文件
+S2N_OBJS_AVX2 = $(filter %_avx2.c.o, $(S2N_OBJS))
+S2N_BC_AVX2 = $(filter %_avx2.c.bc, $(S2N_BC))
 # FASTLOGS=$(patsubst %.saw, fast_saw_logs/%.log, $(SCRIPTS))
 
 # 1. 编译 libs2n.so
 .PHONY : saw-fast
-saw-fast : $(S2N_OBJS)
-	# @echo "S2N_ROOT = $(S2N_ROOT)"
-	# @echo "S2N_SRC = $(S2N_SRC)"
-	# @echo "S2N_OBJS = $(S2N_OBJS)"
-	# @mkdir -p libs2n_objs
+# saw-fast : $(S2N_OBJS)
+saw-fast : $(S2N_BC)
+# 先获取 .bc 文件，以便做 SAW 验证
+# @echo "S2N_OBJS_AVX2 = $(S2N_OBJS_AVX2)"
+# 先把所有的 .bc 文件变成 .o 文件，然后链接成 libs2n.so，接着运行测试套件
+	make cyhlink
+	cp lib/* $(S2N_ROOT)/build/lib
+	make -C $(S2N_ROOT)/build test ARGS="-L unit --output-on-failure -j $(shell nproc)"
+
+cyhlink : $(S2N_OBJS)
+# 链接成 libs2n.so
+	clang -fPIC \
+	-Wl,-z,noexecstack,-z,relro,-z,now \
+	-shared \
+	-Wl,-soname,libs2n.so.1 \
+	-o lib/libs2n.so.1.0.0 \
+	$(S2N_OBJS) \
+	-Wl,-rpath,$(S2N_ROOT)/test-deps/openssl-1.1.1/lib: \
+	$(S2N_ROOT)/test-deps/openssl-1.1.1/lib/libcrypto.so \
+	-ldl \
+	-lrt \
+	-lm \
+	-pthread 
+	cmake -E cmake_symlink_library lib/libs2n.so.1.0.0 lib/libs2n.so.1 lib/libs2n.so
+	cmake -E touch_nocreate lib/libs2n.so
+
 # # 清除 tmp/ 下的所有 .log 文件
 # 	@${MAKE} clean-logs
 # # 清除 s2n, tmp, failure_tests, bitcode 等临时文件夹
@@ -270,17 +296,35 @@ saw-fast : $(S2N_OBJS)
 #   # @${MAKE} failure-tests
 # # added by cyh --- end
 
-libs2n_objs/%.o : $(S2N_ROOT)/%
+$(S2N_BC_AVX2) : libs2n_objs/%.bc : $(S2N_ROOT)/%
 	@mkdir -p $(dir $@)
-	clang	$(FAST_CLANG_FLAGS) -o $@ -c @<
+	clang	$(FAST_CLANG_FLAGS) -mavx2 -mavx -mbmi2 -emit-llvm -o $@ -c $<
 
-# libs2n_objs/
+libs2n_objs/%.bc : $(S2N_ROOT)/%
+	@mkdir -p $(dir $@)
+	clang	$(FAST_CLANG_FLAGS) -emit-llvm -o $@ -c $<
 
-	# -o \
-	# CMakeFiles/s2n.dir/crypto/s2n_aead_cipher_aes_gcm.c.o \
-	# -c \
-	# /home/ieda/prjs/s2n-tls/crypto/s2n_aead_cipher_aes_gcm.c
+# 当多个规则匹配同一个目标时，老版本的 make 会选用第一个规则
+# 新版本的 make 会选用最 specific 的规则
+$(S2N_OBJS_AVX2) : libs2n_objs/%.o : libs2n_objs/%.bc
+	@mkdir -p $(dir $@)
+	llc -filetype=obj --relocation-model=pic $< -o $@
 
+libs2n_objs/%.o : libs2n_objs/%.bc
+	@mkdir -p $(dir $@)
+	llc -filetype=obj --relocation-model=pic $< -o $@
+
+# # 当多个规则匹配同一个目标时，老版本的 make 会选用第一个规则
+# # 新版本的 make 会选用最 specific 的规则
+# $(S2N_OBJS_AVX2) : libs2n_objs/%.o : $(S2N_ROOT)/%
+# 	@mkdir -p $(dir $@)
+# 	clang	$(FAST_CLANG_FLAGS) -mavx2 -mavx -mbmi2 -o $@ -c $<
+
+# libs2n_objs/%.o : $(S2N_ROOT)/%
+# 	@mkdir -p $(dir $@)
+# 	clang	$(FAST_CLANG_FLAGS) -o $@ -c $<
+
+# clang -std=c99 -Wcast-qual -pedantic -Wall -Werror -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow  -Wcast-align -Wwrite-strings -fPIC -Wno-missing-braces -D_POSIX_C_SOURCE=200809L -O2 -I/home/ieda/prjs/s2n-tls/libcrypto-root/include/ -I/home/ieda/prjs/s2n-tls/api/ -I/home/ieda/prjs/s2n-tls -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -D_FORTIFY_SOURCE=2 -fgnu89-inline -fvisibility=hidden -DS2N_EXPORTS -Wstack-protector -fstack-protector-all -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -DS2N_FALL_THROUGH_SUPPORTED -DS2N___RESTRICT__SUPPORTED -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPPORTED -DS2N_PLATFORM_SUPPORTS_KTLS -emit-llvm -c -g -O1 -o ../tests/saw/bitcode/s2n_hash.bc s2n_hash.c 
 
 FAST_CLANG_FLAGS = -D_POSIX_C_SOURCE=200809L \
 	-Ds2n_EXPORTS \
@@ -323,52 +367,16 @@ FAST_CLANG_FLAGS = -D_POSIX_C_SOURCE=200809L \
 	-DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 \
 	-DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX \
 	-DS2N_PLATFORM_SUPPORTS_KTLS \
-	-pthread
+	-pthread \
+  -g -O1
 
-# clang \
-# -D_POSIX_C_SOURCE=200809L \
-# -Ds2n_EXPORTS \
-# -I/home/ieda/prjs/s2n-tls \
-# -I/home/ieda/prjs/s2n-tls/api \
-# -isystem /home/ieda/prjs/s2n-tls/test-deps/openssl-1.1.1/include \
-# -fPIC \
-# -pedantic \
-# -std=gnu99 \
-# -Wall \
-# -Wimplicit \
-# -Wunused \
-# -Wcomment \
-# -Wchar-subscripts \
-# -Wuninitialized \
-# -Wshadow \
-# -Wcast-align \
-# -Wwrite-strings \
-# -Wno-deprecated-declarations \
-# -Wno-unknown-pragmas \
-# -Wformat-security \
-# -Wno-missing-braces \
-# -Wno-strict-prototypes \
-# -Wa,--noexecstack \
-# -Wsign-compare \
-# -Werror \
-# -fvisibility=default \
-# -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 \
-# -DS2N_KYBER512R3_AVX2_BMI2 \
-# -DS2N_STACKTRACE \
-# -DS2N_CPUID_AVAILABLE \
-# -DS2N_FEATURES_AVAILABLE \
-# -fPIC \
-# -DS2N_FALL_THROUGH_SUPPORTED \
-# -DS2N___RESTRICT__SUPPORTED \
-# -DS2N_MADVISE_SUPPORTED \
-# -DS2N_CLONE_SUPPORTED \
-# -Wcast-qual \
-# -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH \
-# -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 \
-# -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX \
-# -DS2N_PLATFORM_SUPPORTS_KTLS \
-# -pthread \
-# -o \
-# CMakeFiles/s2n.dir/crypto/s2n_aead_cipher_aes_gcm.c.o \
-# -c \
-# /home/ieda/prjs/s2n-tls/crypto/s2n_aead_cipher_aes_gcm.c
+
+# /usr/bin/clang -D_POSIX_C_SOURCE=200809L -Ds2n_EXPORTS -I/home/ieda/prjs/s2n-tls -I/home/ieda/prjs/s2n-tls/api -isystem /home/ieda/prjs/s2n-tls/test-deps/openssl-1.1.1/include  -fPIC   -pedantic -std=gnu99 -Wall -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow -Wcast-align -Wwrite-strings -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -Wno-missing-braces -Wno-strict-prototypes -Wa,--noexecstack -Wsign-compare -Werror -fvisibility=default -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 -DS2N_KYBER512R3_AVX2_BMI2 -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -fPIC -DS2N_FALL_THROUGH_SUPPORTED -DS2N___RESTRICT__SUPPORTED -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPPORTED -Wcast-qual -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_PLATFORM_SUPPORTS_KTLS -pthread -g -O1 -c /home/ieda/prjs/s2n-tls/pq-crypto/kyber_r3/kyber512r3_basemul_avx2.S -o libs2n_objs/pq-crypto/kyber_r3/kyber512r3_basemul_avx2.S.o
+# /usr/bin/clang -D_POSIX_C_SOURCE=200809L -Ds2n_EXPORTS -I/home/ieda/prjs/s2n-tls -I/home/ieda/prjs/s2n-tls/api -isystem /home/ieda/prjs/s2n-tls/test-deps/openssl-1.1.1/include  -fPIC   -pedantic -std=gnu99 -Wall -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow -Wcast-align -Wwrite-strings -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -Wno-missing-braces -Wno-strict-prototypes -Wa,--noexecstack -Wsign-compare -Werror -fvisibility=default -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 -DS2N_KYBER512R3_AVX2_BMI2 -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -fPIC -DS2N_FALL_THROUGH_SUPPORTED -DS2N___RESTRICT__SUPPORTED -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPPORTED -Wcast-qual -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_PLATFORM_SUPPORTS_KTLS -pthread -g -O1 -c /home/ieda/prjs/s2n-tls/pq-crypto/kyber_r3/kyber512r3_fq_avx2.S -o libs2n_objs/pq-crypto/kyber_r3/kyber512r3_fq_avx2.S.o
+# /usr/bin/clang -D_POSIX_C_SOURCE=200809L -Ds2n_EXPORTS -I/home/ieda/prjs/s2n-tls -I/home/ieda/prjs/s2n-tls/api -isystem /home/ieda/prjs/s2n-tls/test-deps/openssl-1.1.1/include  -fPIC   -pedantic -std=gnu99 -Wall -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow -Wcast-align -Wwrite-strings -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -Wno-missing-braces -Wno-strict-prototypes -Wa,--noexecstack -Wsign-compare -Werror -fvisibility=default -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 -DS2N_KYBER512R3_AVX2_BMI2 -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -fPIC -DS2N_FALL_THROUGH_SUPPORTED -DS2N___RESTRICT__SUPPORTED -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPPORTED -Wcast-qual -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_PLATFORM_SUPPORTS_KTLS -pthread -g -O1 -c /home/ieda/prjs/s2n-tls/pq-crypto/kyber_r3/kyber512r3_invntt_avx2.S -o libs2n_objs/pq-crypto/kyber_r3/kyber512r3_invntt_avx2.S.o
+# /usr/bin/clang -D_POSIX_C_SOURCE=200809L -Ds2n_EXPORTS -I/home/ieda/prjs/s2n-tls -I/home/ieda/prjs/s2n-tls/api -isystem /home/ieda/prjs/s2n-tls/test-deps/openssl-1.1.1/include  -fPIC   -pedantic -std=gnu99 -Wall -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow -Wcast-align -Wwrite-strings -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -Wno-missing-braces -Wno-strict-prototypes -Wa,--noexecstack -Wsign-compare -Werror -fvisibility=default -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 -DS2N_KYBER512R3_AVX2_BMI2 -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -fPIC -DS2N_FALL_THROUGH_SUPPORTED -DS2N___RESTRICT__SUPPORTED -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPPORTED -Wcast-qual -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_PLATFORM_SUPPORTS_KTLS -pthread -g -O1 -c /home/ieda/prjs/s2n-tls/pq-crypto/kyber_r3/kyber512r3_ntt_avx2.S -o libs2n_objs/pq-crypto/kyber_r3/kyber512r3_ntt_avx2.S.o
+# /usr/bin/clang -D_POSIX_C_SOURCE=200809L -Ds2n_EXPORTS -I/home/ieda/prjs/s2n-tls -I/home/ieda/prjs/s2n-tls/api -isystem /home/ieda/prjs/s2n-tls/test-deps/openssl-1.1.1/include  -fPIC   -pedantic -std=gnu99 -Wall -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow -Wcast-align -Wwrite-strings -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -Wno-missing-braces -Wno-strict-prototypes -Wa,--noexecstack -Wsign-compare -Werror -fvisibility=default -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 -DS2N_KYBER512R3_AVX2_BMI2 -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -fPIC -DS2N_FALL_THROUGH_SUPPORTED -DS2N___RESTRICT__SUPPORTED -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPPORTED -Wcast-qual -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_PLATFORM_SUPPORTS_KTLS -pthread -g -O1 -c /home/ieda/prjs/s2n-tls/pq-crypto/kyber_r3/kyber512r3_shuffle_avx2.S -o libs2n_objs/pq-crypto/kyber_r3/kyber512r3_shuffle_avx2.S.o
+
+
+
+

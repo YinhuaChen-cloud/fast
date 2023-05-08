@@ -39,3 +39,5 @@ build/
 result
 result-*
 *.class
+*.bc
+**/libs2n**
