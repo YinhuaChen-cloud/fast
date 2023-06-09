@@ -74,7 +74,7 @@ clean_the_dir :
 # without it we would see only the tee return code
 tmp/%.log : %.saw bitcode/all_llvm.bc tmp
 	set -o pipefail; \
-	sudo docker run -v $(shell pwd):/a ghcr.io/galoisinc/saw:nightly a/$< | tee $@
+	sudo docker run -v $(shell pwd):/a ghcr.io/galoisinc/saw:nightly a/$< 2>&1 | tee $@
 # saw $< | tee $@
 
 ###########################################
@@ -251,13 +251,11 @@ total-fast :
 	@${MAKE} clean-logs
 	@${MAKE} clean_the_dir
 # FAST 分为
-# 	1. 编译SAW验证相关源码为 LLVM BC，链接成为成为 all_llvm.bc
+#   1. 编译SAW验证相关源码为 LLVM BC，链接成为成为 all_llvm.bc
 	make bitcode/all_llvm.bc
 #   2. 进入突变循环 (代码突变 -> 做SAW验证 -> 若没存活，重新突变，若存活，结束)
-	# bash mutation_loop.sh
-	# 直接 SAW 验证
-	@${MAKE} $(LOGS)
-# 	3. SAW验证结束后，把 all_llvm.bc 文件转换成 all_llvm.o 文件
+	bash mutation_loop.sh
+#   3. SAW验证结束后，把 all_llvm.bc 文件转换成 all_llvm.o 文件
 	llc -filetype=obj --relocation-model=pic bitcode/all_llvm.bc -o bitcode/all_llvm.o
 #   4. 把 all_llvm.o 和 其它 .o 文件共同链接成 libs2n.so 动态库
 	make cyhlink
