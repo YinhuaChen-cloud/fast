@@ -18,7 +18,7 @@ Actually, I find out a code mutant which can pass both SAW verification and test
 
 The code mutant is in s2n_handshake_io.c : s2n_conn_set_handshake_type, as the following image
 
-![image](https://github.com/YinhuaChen-cloud/fast/assets/57990071/79ebdf8c-f035-48cb-b813-ad16a6e41012)
+![image](https://github.com/YinhuaChen-cloud/fast/assets/57990071/1a140c26-e459-479e-afd8-f94b661dd808)
 
 If change the "<" to "!=", the result code can still pass SAW verification and test suite
 
