@@ -73,9 +73,6 @@ clean_the_dir :
 # The pipefail command causes the entire command to fail if saw fails, even though we pipe it to tee
 # without it we would see only the tee return code
 tmp/%.log : %.saw bitcode/all_llvm.bc tmp
-	@echo "Running formal verification with ${YICES_VERSION}"
-	@echo "Running formal verification with SAW version:"
-	@saw --version
 	set -o pipefail; \
 	sudo docker run -v $(shell pwd):/a ghcr.io/galoisinc/saw:nightly a/$< | tee $@
 # saw $< | tee $@
