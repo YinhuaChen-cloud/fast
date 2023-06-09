@@ -44,7 +44,16 @@ The following commands are tested on Ubuntu20.04
   clone this repo
   cd this repo
   S2N_LIBCRYPTO=openssl-1.1.1 BUILD_S2N=true TESTS=integrationv2 GCC_VERSION=9
-  sudo codebuild/bin/s2n_install_test_dependencies.sh  (This command installs dependencies of s2n-tls, if you are in China, you may need to configure proxy to run this command successfully)
+  sudo codebuild/bin/s2n_install_test_dependencies.sh  (This command installs dependencies of s2n-tls, if you are in China, you may need to configure proxy to run this command successfully, and this command may fail because of network situation, you may need to run it multiple time to success)
+```
+
+The result showing sucess on running "sudo codebuild/bin/s2n_install_test_dependencies.sh" is as follows:
+
+
+
+Then let's continue
+
+```
   codebuild/bin/s2n_codebuild.sh
   mkdir -p tests/saw/lib
   cp build/lib/libs2n.so tests/saw/lib/libs2n.so
