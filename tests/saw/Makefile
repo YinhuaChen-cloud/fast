@@ -234,6 +234,11 @@ s2n/s2n.mk : ../../s2n.mk
 s2n/pq-crypto/s2n_pq_asm.mk : ../../pq-crypto/s2n_pq_asm.mk
 	cp $< $@
 
+# #		2. 把 all_llvm.bc 转换成 all_llvm.ll (LLVM IR) 的一种
+# 	llvm-dis bitcode/all_llvm.bc -o bitcode/all_llvm.ll
+
+# #   4. 把突变后的 all_llvm.ll 转回 all_llvm.bc
+# 	llvm-as bitcode/all_llvm.ll -o bitcode/all_llvm.bc
 
 # added by cyh --- start
 # libs2n.so 的一部分，但是不属于 all_llvm.bc 的源C代码文件
@@ -251,19 +256,15 @@ total-fast :
 # FAST 分为
 # 	1. 编译SAW验证相关源码为 LLVM BC，链接成为成为 all_llvm.bc
 	make bitcode/all_llvm.bc
-#		2. 把 all_llvm.bc 转换成 all_llvm.ll (LLVM IR) 的一种
-	llvm-dis bitcode/all_llvm.bc -o bitcode/all_llvm.ll
-#   3. 进行代码突变
-	make mutation
-#   4. 把突变后的 all_llvm.ll 转回 all_llvm.bc
-	llvm-as bitcode/all_llvm.ll -o bitcode/all_llvm.bc
-#   5. 对突变后的 all_llvm.bc 进行 SAW 验证，SAW验证时的输出放在 tmp 文件夹下
+#   2. 进入突变循环 (代码突变 -> 做SAW验证 -> 若没存活，重新突变，若存活，结束)
+	# bash mutation_loop.sh
+	# 直接 SAW 验证
 	@${MAKE} $(LOGS)
-# 	6. SAW验证结束后，把 all_llvm.bc 文件转换成 all_llvm.o 文件
+# 	3. SAW验证结束后，把 all_llvm.bc 文件转换成 all_llvm.o 文件
 	llc -filetype=obj --relocation-model=pic bitcode/all_llvm.bc -o bitcode/all_llvm.o
-#   7. 把 all_llvm.o 和 其它 .o 文件共同链接成 libs2n.so 动态库
+#   4. 把 all_llvm.o 和 其它 .o 文件共同链接成 libs2n.so 动态库
 	make cyhlink
-#   9. 运行测试套件
+#   5. 运行测试套件
 	cp lib/* $(S2N_ROOT)/build/lib
 	make -C $(S2N_ROOT)/build test ARGS="-L unit --output-on-failure -j $(shell nproc)"
 
@@ -348,9 +349,22 @@ FAST_CLANG_FLAGS = -D_POSIX_C_SOURCE=200809L \
 # /usr/bin/clang -D_POSIX_C_SOURCE=200809L -Ds2n_EXPORTS -I/home/ieda/prjs/s2n-tls -I/home/ieda/prjs/s2n-tls/api -isystem /home/ieda/prjs/s2n-tls/test-deps/openssl-1.1.1/include  -fPIC   -pedantic -std=gnu99 -Wall -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow -Wcast-align -Wwrite-strings -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -Wno-missing-braces -Wno-strict-prototypes -Wa,--noexecstack -Wsign-compare -Werror -fvisibility=default -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 -DS2N_KYBER512R3_AVX2_BMI2 -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -fPIC -DS2N_FALL_THROUGH_SUPPORTED -DS2N___RESTRICT__SUPPORTED -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPPORTED -Wcast-qual -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_PLATFORM_SUPPORTS_KTLS -pthread -g -O1 -c /home/ieda/prjs/s2n-tls/pq-crypto/kyber_r3/kyber512r3_ntt_avx2.S -o libs2n_objs/pq-crypto/kyber_r3/kyber512r3_ntt_avx2.S.o
 # /usr/bin/clang -D_POSIX_C_SOURCE=200809L -Ds2n_EXPORTS -I/home/ieda/prjs/s2n-tls -I/home/ieda/prjs/s2n-tls/api -isystem /home/ieda/prjs/s2n-tls/test-deps/openssl-1.1.1/include  -fPIC   -pedantic -std=gnu99 -Wall -Wimplicit -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow -Wcast-align -Wwrite-strings -Wno-deprecated-declarations -Wno-unknown-pragmas -Wformat-security -Wno-missing-braces -Wno-strict-prototypes -Wa,--noexecstack -Wsign-compare -Werror -fvisibility=default -DS2N_BLOCK_NONPORTABLE_OPTIMIZATIONS=1 -DS2N_KYBER512R3_AVX2_BMI2 -DS2N_STACKTRACE -DS2N_CPUID_AVAILABLE -DS2N_FEATURES_AVAILABLE -fPIC -DS2N_FALL_THROUGH_SUPPORTED -DS2N___RESTRICT__SUPPORTED -DS2N_MADVISE_SUPPORTED -DS2N_CLONE_SUPPORTED -Wcast-qual -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD5_SHA1_HASH -DS2N_LIBCRYPTO_SUPPORTS_EVP_RC4 -DS2N_LIBCRYPTO_SUPPORTS_EVP_MD_CTX_SET_PKEY_CTX -DS2N_PLATFORM_SUPPORTS_KTLS -pthread -g -O1 -c /home/ieda/prjs/s2n-tls/pq-crypto/kyber_r3/kyber512r3_shuffle_avx2.S -o libs2n_objs/pq-crypto/kyber_r3/kyber512r3_shuffle_avx2.S.o
 
-.PHONY : mutation
-mutation:
-	@echo "code mutation"
-
 # added by cyh --- end
 
+# added by cyh --- start
+
+# count = 1
+# .PHONY : mutation_loop
+# mutation_loop:
+# 	while test -n "$$(cat aaa)"; do \
+# 		# code mutation \
+# 		$(eval count=$(shell echo $$(($(count)+1)))) \
+# 		echo $(count) \
+# 	done
+
+
+# for number in 1 2 3 4 ; do \
+# 	echo $$number ; \
+# done
+
+# added by cyh --- end
