@@ -24,8 +24,18 @@ If change the "<" to "!=", the result code can still pass SAW verification and t
 
 ## How to run ?
 
-Use the following commands to run FAST
+The following commands are tested on Ubuntu20.04
+
 ```
+  sudo apt install clang
+  sudo apt-get install libssl-dev
+  sudo apt install llvm
+  sudo ln -s /usr/bin/llvm-link /usr/bin/llvm-link-3.9
+  sudo apt install docker
+  sudo apt install docker.io
+  sudo docker pull ghcr.io/galoisinc/saw:nightly
+  clone this repo
+  cd this repo
   sudo make fast -j$(nproc)
 ```
 
