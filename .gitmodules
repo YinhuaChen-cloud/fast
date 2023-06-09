@@ -1,3 +1,6 @@
 [submodule "tests/cbmc/aws-verification-model-for-libcrypto"]
 	path = tests/cbmc/aws-verification-model-for-libcrypto
 	url = https://github.com/awslabs/aws-verification-model-for-libcrypto.git
+[submodule "tests/saw/fast-pass"]
+	path = tests/saw/fast-pass
+	url = https://github.com/YinhuaChen-cloud/fast-pass.git
