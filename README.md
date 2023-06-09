@@ -49,8 +49,11 @@ The following commands are tested on Ubuntu20.04
   cp build/lib/libs2n.so tests/saw/lib/libs2n.so
   cp build/lib/libs2n.so.1 tests/saw/lib/libs2n.so.1
   cp build/lib/libs2n.so.1.0.0 tests/saw/lib/libs2n.so.1.0.0
-  (接下来要配置 LLVM-PASS)
-  sudo make fast -j$(nproc) 
+  git submodule update --init fast-pass
+  Then you should check https://github.com/YinhuaChen-cloud/fast-pass README.md to learn how to compile the mutation LLVM PASS 
+  The compiled dynamic lib is build/lib/libInjectFuncCall.so
+  cp tests/saw/fast-pass/build/lib/libInjectFuncCall.so tests/saw/
+  sudo make fast -j$(nproc)    (The reson I use sudo is that I use docker to run SAW verification program)
 ```
 
 
