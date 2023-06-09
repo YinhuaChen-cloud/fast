@@ -4,7 +4,7 @@ This project is a simplified reproduction of FAST, which is a SPEC-fuzzing techn
 
 The repo applied FAST is s2n-tls, the original repo url is https://github.com/aws/s2n-tls.git
 
-## Where to simplify?
+## What to simplify?
 
 1. The mutation strategy is "Random Mutation", not the "Evolutionary Mutation" mentioned in the paper.
 
@@ -26,6 +26,8 @@ If change the "<" to "!=", the result code can still pass SAW verification and t
 
 The following commands are tested on Ubuntu20.04
 
+(If memory of machine is too small, the program may crash in the SAW verification part)
+
 ```
   sudo apt install clang
   sudo apt-get install libssl-dev
@@ -34,9 +36,21 @@ The following commands are tested on Ubuntu20.04
   sudo apt install docker
   sudo apt install docker.io
   sudo docker pull ghcr.io/galoisinc/saw:nightly
+  sudo apt install z3
+  sudo add-apt-repository ppa:sri-csl/formal-methods
+  sudo apt-get update
+  sudo apt-get install yices2
   clone this repo
   cd this repo
-  sudo make fast -j$(nproc)
+  S2N_LIBCRYPTO=openssl-1.1.1 BUILD_S2N=true TESTS=integrationv2 GCC_VERSION=9
+  sudo codebuild/bin/s2n_install_test_dependencies.sh  (This command installs dependencies of s2n-tls, if you are in China, you may need to configure proxy to run this command successfully)
+  codebuild/bin/s2n_codebuild.sh
+  mkdir -p tests/saw/lib
+  cp build/lib/libs2n.so tests/saw/lib/libs2n.so
+  cp build/lib/libs2n.so.1 tests/saw/lib/libs2n.so.1
+  cp build/lib/libs2n.so.1.0.0 tests/saw/lib/libs2n.so.1.0.0
+  (接下来要配置 LLVM-PASS)
+  sudo make fast -j$(nproc) 
 ```
 
 
