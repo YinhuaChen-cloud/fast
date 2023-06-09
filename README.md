@@ -49,7 +49,7 @@ The following commands are tested on Ubuntu20.04
 
 The result showing sucess on running "sudo codebuild/bin/s2n_install_test_dependencies.sh" is as follows:
 
-
+![success](https://github.com/YinhuaChen-cloud/fast/assets/57990071/a86b1d9f-c951-4840-8439-7a333e88eb9f)
 
 Then let's continue
 
