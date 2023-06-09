@@ -4,7 +4,7 @@ This project is a simplified reproduction of FAST, which is a SPEC-fuzzing techn
 
 The repo applied FAST is s2n-tls, the original repo url is https://github.com/aws/s2n-tls.git
 
-## What to simplify?
+## What to simplify ?
 
 1. The mutation strategy is "Random Mutation", not the "Evolutionary Mutation" mentioned in the paper.
 
@@ -12,7 +12,13 @@ The repo applied FAST is s2n-tls, the original repo url is https://github.com/aw
 
 3. To obtain quick feedback results and shorten the development cycle when using random mutation, I only mutated the code in two functions: s2n_conn_set_handshake_type in s2n_handshake_io.c and s2nshake_type_set_tls12_flag in s2n_handshake_type.c. But it is possible to switch to mutation on all s2n-tls code. The related documentation is here: https://github.com/YinhuaChen-cloud/fast-pass.
 
-## Any experiment results?
+## What I use to mutate on code ?
+
+I use LLVM PASS，and the code is here: https://github.com/YinhuaChen-cloud/fast-pass.
+
+You can learn more in the github repo README.md
+
+## Any experiment results ?
 
 Actually, I find out a code mutant which can pass both SAW verification and test suite, and this code mutant is not specifically mentioned in the paper.
 
@@ -33,13 +39,8 @@ The following commands are tested on Ubuntu20.04
   sudo apt-get install libssl-dev
   sudo apt install llvm
   sudo ln -s /usr/bin/llvm-link /usr/bin/llvm-link-3.9
-  sudo apt install docker
   sudo apt install docker.io
   sudo docker pull ghcr.io/galoisinc/saw:nightly
-  sudo apt install z3
-  sudo add-apt-repository ppa:sri-csl/formal-methods
-  sudo apt-get update
-  sudo apt-get install yices2
   clone this repo
   cd this repo
   S2N_LIBCRYPTO=openssl-1.1.1 BUILD_S2N=true TESTS=integrationv2 GCC_VERSION=9
@@ -49,7 +50,7 @@ The following commands are tested on Ubuntu20.04
   cp build/lib/libs2n.so tests/saw/lib/libs2n.so
   cp build/lib/libs2n.so.1 tests/saw/lib/libs2n.so.1
   cp build/lib/libs2n.so.1.0.0 tests/saw/lib/libs2n.so.1.0.0
-  git submodule update --init fast-pass
+  git submodule update --init tests/saw/fast-pass
   Then you should check https://github.com/YinhuaChen-cloud/fast-pass README.md to learn how to compile the mutation LLVM PASS 
   The compiled dynamic lib is build/lib/libInjectFuncCall.so
   cp tests/saw/fast-pass/build/lib/libInjectFuncCall.so tests/saw/
