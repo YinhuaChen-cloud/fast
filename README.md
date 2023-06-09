@@ -63,7 +63,7 @@ Then let's continue
   Then you should check https://github.com/YinhuaChen-cloud/fast-pass README.md to learn how to compile the mutation LLVM PASS 
   The compiled dynamic lib is build/lib/libInjectFuncCall.so
   cp tests/saw/fast-pass/build/lib/libInjectFuncCall.so tests/saw/
-  sudo make fast -j$(nproc)    (The reson I use sudo is that I use docker to run SAW verification program)
+  make fast -j$(nproc)    (You may need to enter sudo password in the middle of this command since I use docker to run SAW verification)
 ```
 
 
