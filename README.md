@@ -66,5 +66,16 @@ Then let's continue
   make fast -j$(nproc)    (You may need to enter sudo password in the middle of this command since I use docker to run SAW verification)
 ```
 
+According to my experiments, the program will produce a code mutant which can survive SAW verification in serveral hours.
+
+You can use the following commands to see what mutation is applied to s2n-tls code:
+
+```
+cd tests/saw/bitcode
+llvm-dis all_llvm.bc.backup -o old.ll
+llvm-dis all_llvm.bc -o new.ll
+diff old.ll new.ll
+```
+
 
 
